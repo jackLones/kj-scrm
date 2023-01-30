@@ -1,0 +1,72 @@
+{
+  "id": "",
+  "name": "",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "991739",
+      "name": "全部",
+      "font_class": "quanbu",
+      "unicode": "e628",
+      "unicode_decimal": 58920
+    },
+    {
+      "icon_id": "1221225",
+      "name": "性别女",
+      "font_class": "xingbienv",
+      "unicode": "e605",
+      "unicode_decimal": 58885
+    },
+    {
+      "icon_id": "1221226",
+      "name": "性别男",
+      "font_class": "xingbienan",
+      "unicode": "e606",
+      "unicode_decimal": 58886
+    },
+    {
+      "icon_id": "1345543",
+      "name": "飞行漫游",
+      "font_class": "icon-feixingmanyou",
+      "unicode": "e624",
+      "unicode_decimal": 58916
+    },
+    {
+      "icon_id": "1664368",
+      "name": "下箭头",
+      "font_class": "xiajiantou",
+      "unicode": "e731",
+      "unicode_decimal": 59185
+    },
+    {
+      "icon_id": "6251508",
+      "name": "icon_三角形",
+      "font_class": "icon_sanjiaoxing",
+      "unicode": "e6bb",
+      "unicode_decimal": 59067
+    },
+    {
+      "icon_id": "7983629",
+      "name": "全部",
+      "font_class": "xingzhuang",
+      "unicode": "e610",
+      "unicode_decimal": 58896
+    },
+    {
+      "icon_id": "9441434",
+      "name": "资产-全部设备",
+      "font_class": "zichan-quanbushebei",
+      "unicode": "e668",
+      "unicode_decimal": 58984
+    },
+    {
+      "icon_id": "12097596",
+      "name": "全部",
+      "font_class": "quanbu1",
+      "unicode": "e66c",
+      "unicode_decimal": 58988
+    }
+  ]
+}

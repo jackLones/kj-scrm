@@ -1,0 +1,262 @@
+<?php
+
+	namespace app\models;
+
+	use app\components\InvalidDataException;
+	use app\util\DateUtil;
+	use app\util\SUtils;
+	use callmez\wechat\sdk\Wechat;
+	use Yii;
+
+	/**
+	 * This is the model class for table "{{%high_level_push_msg}}".
+	 *
+	 * @property int         $id
+	 * @property int         $author_id      公众号ID
+	 * @property string      $msg_title      消息名称
+	 * @property int         $msg_type       类型，1：文本（text）、2：图片（img）、3：语音（voice）、4：视频（video）、5：图文（news）
+	 * @property string      $content        文本消息内容
+	 * @property int         $material_id    素材ID
+	 * @property int         $attachment_id  附件ID
+	 * @property int         $to_wx          出现在微信后台已群发消息，0：不出现、1：出现
+	 * @property int         $push_type      发送类别：1：全部粉丝、2：标签、3：性别、4：自定义
+	 * @property string      $push_rule      发送条件（json格式）
+	 * @property string      $push_time      发送时间
+	 * @property string      $notice_phone   发送失败的通知手机号
+	 * @property int         $continue       若有文章判定为转载，继续群发若有文章判定为转载，继续群发，0：不继续、1：继续
+	 * @property string      $create_time    创建时间
+	 * @property string      $target_num     预计发送粉丝数
+	 * @property string      $fans_num       发送成功粉丝数
+	 * @property string      $queue_id       队列id
+	 * @property string      $msg_id         消息发送任务的ID，多个已逗号隔开
+	 * @property string      $error_code     错误码
+	 * @property string      $error_msg      错误信息
+	 * @property string      $status         状态 0未发送 1已发送 2发送失败
+	 * @property string      $is_del         状态 0未删除 1已删除
+	 *
+	 * @property WxAuthorize $author
+	 * @property Material    $material
+	 * @property Attachment  $attachment
+	 */
+	class HighLevelPushMsg extends \yii\db\ActiveRecord
+	{
+		const TEXT_MSG = 1;
+		const IMG_MSG = 2;
+		const VOICE_MSG = 3;
+		const VIDEO_MSG = 4;
+		const NEWS_MSG = 5;
+
+		const NOT_TO_WX = 0;
+		const TO_WX = 1;
+
+		const PUSH_TO_ALL = 1;
+		const PUSH_BY_TAGS = 2;
+		const PUSH_BY_SEX = 3;
+		const PUSH_BY_CUSTOM = 4;
+
+		const NOT_CONTINUE = 0;
+		const ALWAYS_CONTINUE = 1;
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public static function tableName ()
+		{
+			return '{{%high_level_push_msg}}';
+		}
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public function rules ()
+		{
+			return [
+				[['author_id', 'msg_type', 'material_id', 'to_wx', 'push_type', 'continue'], 'integer'],
+				[['content', 'push_rule'], 'string'],
+				[['push_time', 'create_time'], 'safe'],
+				[['msg_title', 'notice_phone'], 'string', 'max' => 32],
+				[['author_id'], 'exist', 'skipOnError' => true, 'targetClass' => WxAuthorize::className(), 'targetAttribute' => ['author_id' => 'author_id']],
+				[['material_id'], 'exist', 'skipOnError' => true, 'targetClass' => Material::className(), 'targetAttribute' => ['material_id' => 'id']],
+			];
+		}
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public function attributeLabels ()
+		{
+			return [
+				'id'            => Yii::t('app', 'ID'),
+				'author_id'     => Yii::t('app', '公众号ID'),
+				'msg_title'     => Yii::t('app', '消息名称'),
+				'msg_type'      => Yii::t('app', '类型，1：文本（text）、2：图片（img）、3：语音（voice）、4：视频（video）、5：图文（news）'),
+				'content'       => Yii::t('app', '文本消息内容'),
+				'material_id'   => Yii::t('app', '素材ID'),
+				'attachment_id' => Yii::t('app', '附件ID'),
+				'to_wx'         => Yii::t('app', '出现在微信后台已群发消息，0：不出现、1：出现'),
+				'push_type'     => Yii::t('app', '发送类别：1：全部粉丝、2：标签、3：性别、4：自定义'),
+				'push_rule'     => Yii::t('app', '发送条件（json格式）'),
+				'push_time'     => Yii::t('app', '发送时间'),
+				'notice_phone'  => Yii::t('app', '发送失败的通知手机号'),
+				'continue'      => Yii::t('app', '若有文章判定为转载，继续群发若有文章判定为转载，继续群发，0：不继续、1：继续'),
+				'create_time'   => Yii::t('app', '创建时间'),
+				'target_num'    => Yii::t('app', '预计发送粉丝数'),
+				'fans_num'      => Yii::t('app', '发送成功粉丝数'),
+				'queue_id'      => Yii::t('app', '队列id'),
+				'msg_id'        => Yii::t('app', '消息发送任务的ID'),
+				'error_code'    => Yii::t('app', '错误码'),
+				'error_msg'     => Yii::t('app', '错误信息'),
+				'status'        => Yii::t('app', '状态 0未发送 1已发送 2发送失败'),
+				'is_del'        => Yii::t('app', '状态 0未删除 1已删除'),
+			];
+		}
+
+		/**
+		 *
+		 * @return object|\yii\db\Connection|null
+		 *
+		 * @throws \yii\base\InvalidConfigException
+		 */
+		public static function getDb ()
+		{
+			return Yii::$app->get('mdb');
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getAuthor ()
+		{
+			return $this->hasOne(WxAuthorize::className(), ['author_id' => 'author_id']);
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getMaterial ()
+		{
+			return $this->hasOne(Material::className(), ['id' => 'material_id']);
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getAttachment ()
+		{
+			return $this->hasOne(Attachment::className(), ['id' => 'attachment_id']);
+		}
+
+		/**
+		 * {@inheritDoc}
+		 * @return bool
+		 */
+		public function beforeSave ($insert)
+		{
+			$this->content = rawurlencode($this->content);
+
+			return parent::beforeSave($insert); // TODO: Change the autogenerated stub
+		}
+
+		/**
+		 * {@inheritDoc}
+		 */
+		public function afterFind ()
+		{
+			if (!empty($this->content)) {
+				$this->content = rawurldecode($this->content);
+			}
+
+			parent::afterFind();
+		}
+
+		//设置高级群发推送表
+		public static function setHighPush ($data)
+		{
+			if (empty($data['id'])) {
+				$highPush = new HighLevelPushMsg();
+				$msgInfo  = static::findOne(['author_id' => $data['author_id'], 'msg_title' => $data['msg_title'], 'is_del' => 0]);
+				if (!empty($msgInfo)) {
+					throw new InvalidDataException('消息名称已存在，请更改');
+				}
+			} else {
+				$highPush = HighLevelPushMsg::findOne($data['id']);
+			}
+			if (!empty($data['attachment_id'])) {
+				$highPush->attachment_id = $data['attachment_id'];
+				$attachment              = Attachment::findOne($data['attachment_id']);
+				if (empty($attachment) || $attachment->status == 0) {
+					throw new InvalidDataException('素材已被删除，请重新编辑后再发送');
+				}
+
+				if (!empty($attachment->material_id) && $attachment->material->author_id == $data['author_id'] && !empty($attachment->material->status)) {
+					$highPush->material_id = $attachment->material_id;
+				} else {
+					//$material = Material::findOne(['author_id'=>$data['author_id'],'attachment_id'=>$data['attachment_id']]);
+					$material = Material::getMaterial(['author_id' => $data['author_id'], 'attachment_id' => $data['attachment_id'], 'file_type' => $attachment->file_type]);
+					if (!empty($material)) {
+						$highPush->material_id = $material->id;
+					}
+				}
+			}
+//			if(!empty($data['material_id'])){
+//				$material = Material::findOne($data['material_id']);
+//				if($material->status == 0){
+//					throw new InvalidDataException('素材已被删除，请重新编辑后再发送');
+//				}
+//			}
+			$highPush->author_id = $data['author_id'];
+			$highPush->msg_title = $data['msg_title'];
+			$highPush->msg_type  = $data['msg_type'];
+			$highPush->content   = $data['content'];
+			//$highPush->material_id = !empty($data['material_id']) ? $data['material_id'] : NULL;
+			$highPush->push_type  = $data['push_type'];
+			$highPush->target_num = $data['target_num'];
+			$highPush->continue   = $data['continue'];
+			$extend['sex']        = $data['sex'];
+			$extend['stime']      = $data['stime'];
+			$extend['etime']      = $data['etime'];
+			$extend['province']   = $data['province'];
+			$extend['city']       = $data['city'];
+			$extend['tag_ids']    = $data['tag_ids'];
+			$extend['openids']    = $data['openids'];
+			$extend['send_type']  = $data['send_type'];
+			$extend['is_custom']  = $data['is_custom'];
+			$highPush->push_rule  = json_encode($extend, JSON_UNESCAPED_UNICODE);
+			if ($data['send_type'] == 1) {
+				$highPush->push_time = DateUtil::getCurrentTime();
+			} else {
+				$highPush->push_time = date('Y-m-d H:i:s', $data['send_time']);
+			}
+			$highPush->status      = 0;
+			$highPush->create_time = DateUtil::getCurrentTime();
+			if (!$highPush->validate() || !$highPush->save()) {
+				if (empty($data['id'])) {
+					throw new InvalidDataException('创建失败.' . SUtils::modelError($highPush));
+				} else {
+					throw new InvalidDataException('修改失败.' . SUtils::modelError($highPush));
+				}
+			}
+
+			return $highPush->id;
+		}
+
+		//高级群发推送消息时 video信息需另外发送一次.
+		public static function getVideoMediaId ($author_id, $media_id, $title = '', $description = '')
+		{
+			$wxAuthInfo  = WxAuthorize::findOne(['author_id' => $author_id]);
+			$wxAuthorize = WxAuthorize::getTokenInfo($wxAuthInfo->authorizer_appid, false, true);
+			if (empty($wxAuthorize)) {
+				throw new InvalidDataException('获取token失败');
+			}
+			$wechat = \Yii::createObject([
+				'class'          => Wechat::className(),
+				'appId'          => $wxAuthInfo->authorizer_appid,
+				'appSecret'      => $wxAuthorize['config']->appSecret,
+				'token'          => $wxAuthorize['config']->token,
+				'componentAppId' => $wxAuthorize['config']->appid,
+			]);
+			$result = $wechat->uploadVideo($media_id, $title, $description);
+
+			return !empty($result['media_id']) ? $result['media_id'] : '';
+		}
+	}

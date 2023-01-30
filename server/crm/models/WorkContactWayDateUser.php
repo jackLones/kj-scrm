@@ -1,0 +1,117 @@
+<?php
+
+	namespace app\models;
+
+	use Yii;
+	use app\util\DateUtil;
+	use app\util\SUtils;
+	use app\components\InvalidDataException;
+
+	/**
+	 * This is the model class for table "{{%work_contact_way_date_user}}".
+	 *
+	 * @property int                $id
+	 * @property int                $date_id     企业微信联系我表ID
+	 * @property string             $time        具体时间
+	 * @property string             $user_key    用户选择的key值
+	 * @property string             $department  部门id
+	 * @property string             $create_time 创建时间
+	 *
+	 * @property WorkContactWayDate $date
+	 */
+	class WorkContactWayDateUser extends \yii\db\ActiveRecord
+	{
+		/**
+		 * {@inheritdoc}
+		 */
+		public static function tableName ()
+		{
+			return '{{%work_contact_way_date_user}}';
+		}
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public function rules ()
+		{
+			return [
+				[['date_id'], 'required'],
+				[['date_id'], 'integer'],
+				[['create_time'], 'safe'],
+				[['time'], 'string', 'max' => 32],
+				[['department'], 'string', 'max' => 255],
+				[['date_id'], 'exist', 'skipOnError' => true, 'targetClass' => WorkContactWayDate::className(), 'targetAttribute' => ['date_id' => 'id']],
+			];
+		}
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public function attributeLabels ()
+		{
+			return [
+				'id'          => 'ID',
+				'date_id'     => '企业微信联系我表ID',
+				'time'        => '具体时间',
+				'user_key'    => '用户选择的key值',
+				'department'  => '部门id',
+				'create_time' => '创建时间',
+			];
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getDate ()
+		{
+			return $this->hasOne(WorkContactWayDate::className(), ['id' => 'date_id']);
+		}
+
+		/**
+		 * @param $data
+		 * @param $id
+		 *
+		 * @return bool
+		 *
+		 * @throws InvalidDataException
+		 */
+		public static function setData ($data, $id)
+		{
+			$newDate = [];
+			try {
+				static::deleteAll(['date_id' => $id]);
+				foreach ($data as $key => $val) {
+					$start_time = $val['start_time'];
+					$end_time   = $val['end_time'];
+					$department = isset($val['party']) && !empty($val['party']) ? $val['party'] : '';
+					array_push($newDate, $start_time . '-' . $end_time);
+					$dateUser              = new WorkContactWayDateUser();
+					$dateUser->create_time = DateUtil::getCurrentTime();
+					$dateUser->date_id     = $id;
+					$dateUser->time        = $start_time . '-' . $end_time;
+					$dateUser->department  = !empty($department) ? json_encode($department) : '';
+					$userList              = $val['userList'];
+					if (is_array($val['userList'])) {
+						$uList = $val['userList'];
+						foreach ($uList as $k => $v) {
+							if (isset($v['is_del']) && $v['is_del'] == 1) {
+								unset($uList[$k]);
+							}
+						}
+						$userList = json_encode($uList);
+					}
+					$dateUser->user_key = !empty($userList) ? $userList : '';
+					if (!$dateUser->validate() || !$dateUser->save()) {
+						throw new InvalidDataException(SUtils::modelError($dateUser));
+					}
+				}
+			} catch (\Exception $e) {
+				$message = $e->getMessage();
+				\Yii::error($message, '$message-2');
+				throw new InvalidDataException($message);
+			}
+
+			return true;
+		}
+
+	}

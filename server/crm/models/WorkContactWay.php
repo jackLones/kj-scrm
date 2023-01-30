@@ -1,0 +1,1753 @@
+<?php
+
+	namespace app\models;
+
+	use app\components\InvalidDataException;
+	use app\queue\WorkContactWayUpdateJob;
+	use app\util\DateUtil;
+	use app\util\SUtils;
+	use app\util\WorkUtils;
+	use dovechen\yii2\weWork\src\dataStructure\ExternalContactWay;
+	use dovechen\yii2\weWork\Work;
+	use Matrix\Exception;
+	use Yii;
+	use yii\helpers\ArrayHelper;
+	use yii\helpers\Json;
+	use yii\queue\db\Queue;
+
+	/**
+	 * This is the model class for table "{{%work_contact_way}}".
+	 *
+	 * @property int                             $id
+	 * @property int                             $corp_id                    授权的企业ID
+	 * @property int                             $way_group_id               渠道活码分组id
+	 * @property string                          $config_id                  联系方式的配置id
+	 * @property string                          $title                      活码名称
+	 * @property int                             $type                       联系方式类型,1-单人, 2-多人
+	 * @property int                             $scene                      场景，1-在小程序中联系，2-通过二维码联系
+	 * @property int                             $style                      在小程序中联系时使用的控件样式，详见附表
+	 * @property string                          $remark                     联系方式的备注信息，用于助记，不超过30个字符
+	 * @property int                             $skip_verify                是否需要验证，1需要 0不需要
+	 * @property int                             $verify_all_day             自动验证1全天开启2分时段
+	 * @property string                          $state                      企业自定义的state参数，用于区分不同的添加渠道，在调用“获取外部联系人详情”时会返回该参数值
+	 * @property int                             $spare_employee             备用员工
+	 * @property int                             $is_welcome_date            欢迎语时段日期 1关 2开
+	 * @property int                             $is_welcome_week            欢迎语时段周 1关 2开
+	 * @property int                             $is_limit                   员工上限 1关 2开
+	 * @property int                             $is_del                     0：未删除；1：已删除
+	 * @property string                          $qr_code                    联系二维码的URL
+	 * @property string                          $open_date                  0关闭1开启
+	 * @property int                             $add_num                    添加人数
+	 * @property string                          $tag_ids                    给客户打的标签
+	 * @property string                          $user_key                   用户选择的key值
+	 * @property string                          $content                    渠道活码的欢迎语内容
+	 * @property int                             $status                     渠道活码的欢迎语是否开启0关闭1开启
+	 * @property int                             $sync_attachment_id         同步后的素材id
+	 * @property int                             $work_material_id           企业微信素材id
+	 * @property int                             $groupId                    分组id
+	 * @property int                             $material_sync              0不同步到内容库1同步
+	 * @property int                             $attachment_id              内容引擎id
+	 * @property string                          $update_time                更新时间
+	 * @property string                          $create_time                创建时间
+	 * @property string                          $local_path                 二维码图片本地地址
+	 * @property string                          $package_del                0正常1超出套餐删除
+	 * @property int                             $is_new                     是否新创建
+	 *
+	 * @property WorkCorp                        $corp
+	 * @property WorkContactWayDepartment[]      $workContactWayDepartments
+	 * @property WorkContactWayUser[]            $workContactWayUsers
+	 * @property WorkExternalContactFollowUser[] $workExternalContactFollowUsers
+	 * @property workContactWayGroup             $workContactWayGroup
+	 */
+	class WorkContactWay extends \yii\db\ActiveRecord
+	{
+		const WAY_NOT_DEL = 0;
+		const WAY_IS_DEL = 1;
+
+		const DEFAULT_WAY_PRE = "DefaultWay";
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public static function tableName ()
+		{
+			return '{{%work_contact_way}}';
+		}
+
+		/**
+		 * {@inheritdoc}
+		 */
+		public function rules ()
+		{
+			return [
+				[['is_new', 'package_del', 'corp_id', 'type', 'scene', 'style', 'skip_verify', 'sync_attachment_id', 'work_material_id', 'groupId', 'material_sync', 'attachment_id', 'is_del', 'add_num', 'status', 'open_date', 'verify_all_day', 'is_welcome_date', 'is_welcome_week', 'is_limit'], 'integer'],
+				[['tag_ids', 'content', 'title'], 'string'],
+				[['update_time', 'create_time'], 'safe'],
+				[['config_id', 'remark', 'state'], 'string', 'max' => 64],
+				[['title'], 'string', 'max' => 200],
+				[['qr_code', 'user_key'], 'string', 'max' => 255],
+				[['corp_id'], 'exist', 'skipOnError' => true, 'targetClass' => WorkCorp::className(), 'targetAttribute' => ['corp_id' => 'id']],
+			];
+		}
+		/**
+		 * {@inheritDoc}
+		 * @return bool
+		 */
+		public function beforeSave ($insert)
+		{
+			$this->content = rawurlencode($this->content);
+
+			return parent::beforeSave($insert); // TODO: Change the autogenerated stub
+		}
+
+		/**
+		 * {@inheritDoc}
+		 */
+		public function afterFind ()
+		{
+			if (!empty($this->content)) {
+				$this->content = rawurldecode($this->content);
+			}
+
+			parent::afterFind(); // TODO: Change the autogenerated stub
+		}
+		/**
+		 * {@inheritdoc}
+		 */
+		public function attributeLabels ()
+		{
+			return [
+				'id'                 => Yii::t('app', 'ID'),
+				'corp_id'            => Yii::t('app', '授权的企业ID'),
+				'way_group_id'       => Yii::t('app', '渠道活码分组id'),
+				'config_id'          => Yii::t('app', '联系方式的配置id'),
+				'title'              => Yii::t('app', '活码名称'),
+				'type'               => Yii::t('app', '联系方式类型,1-单人, 2-多人'),
+				'scene'              => Yii::t('app', '场景，1-在小程序中联系，2-通过二维码联系'),
+				'style'              => Yii::t('app', '在小程序中联系时使用的控件样式，详见附表'),
+				'remark'             => Yii::t('app', '联系方式的备注信息，用于助记，不超过30个字符'),
+				'skip_verify'        => Yii::t('app', '是否需要验证，1需要 0不需要'),
+				'verify_all_day'     => Yii::t('app', '自动验证1全天开启2分时段'),
+				'state'              => Yii::t('app', '企业自定义的state参数，用于区分不同的添加渠道，在调用“获取外部联系人详情”时会返回该参数值'),
+				'spare_employee'     => Yii::t('app', '备用员工'),
+				'is_welcome_date'    => Yii::t('app', '欢迎语时段日期 1关 2开'),
+				'is_welcome_week'    => Yii::t('app', '欢迎语时段周 1关 2开'),
+				'is_limit'           => Yii::t('app', '员工上限 1关 2开'),
+				'is_del'             => Yii::t('app', '0：未删除；1：已删除'),
+				'qr_code'            => Yii::t('app', '联系二维码的URL'),
+				'open_date'          => Yii::t('app', '0关闭1开启'),
+				'add_num'            => Yii::t('app', '添加人数'),
+				'tag_ids'            => Yii::t('app', '给客户打的标签'),
+				'user_key'           => Yii::t('app', '用户选择的key值'),
+				'content'            => Yii::t('app', '渠道活码的欢迎语内容'),
+				'status'             => Yii::t('app', '渠道活码的欢迎语是否开启0关闭1开启'),
+				'sync_attachment_id' => Yii::t('app', '同步后的素材id'),
+				'work_material_id'   => Yii::t('app', '企业微信素材id'),
+				'groupId'            => Yii::t('app', '分组id'),
+				'material_sync'      => Yii::t('app', '0不同步1同步'),
+				'attachment_id'      => Yii::t('app', '内容引擎id'),
+				'update_time'        => Yii::t('app', '更新时间'),
+				'create_time'        => Yii::t('app', '创建时间'),
+				'local_path'         => Yii::t('app', '二维码图片本地地址'),
+				'package_del'        => Yii::t('app', '正常1超出套餐删除'),
+				'is_new'             => Yii::t('app', '是否新创建'),
+			];
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getCorp ()
+		{
+			return $this->hasOne(WorkCorp::className(), ['id' => 'corp_id']);
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getWorkContactWayDepartments ()
+		{
+			return $this->hasMany(WorkContactWayDepartment::className(), ['config_id' => 'id']);
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getWorkContactWayUsers ()
+		{
+			return $this->hasMany(WorkContactWayUser::className(), ['config_id' => 'id']);
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getWorkExternalContactFollowUsers ()
+		{
+			return $this->hasMany(WorkExternalContactFollowUser::className(), ['way_id' => 'id']);
+		}
+
+		/**
+		 * @return \yii\db\ActiveQuery
+		 */
+		public function getWorkContactWayGroup ()
+		{
+			return $this->hasOne(WorkContactWayGroup::className(), ['id' => 'way_group_id']);
+		}
+
+		/**
+		 * @param bool $withUser
+		 * @param bool $withParty
+		 *
+		 * @return array
+		 */
+		public function dumpData ($withUser = false, $withParty = false)
+		{
+			$result = [
+				'id'                 => strval($this->id),
+				'corp_id'            => $this->corp_id,
+				'way_group_id'       => strval($this->way_group_id),
+				'config_id'          => $this->config_id,
+				'type'               => $this->type,
+				'title'              => $this->title,
+				'scene'              => $this->scene,
+				'style'              => $this->style,
+				'remark'             => $this->remark,
+				'skip_verify'        => $this->skip_verify,
+				'state'              => $this->state,
+				'is_del'             => $this->is_del,
+				'qr_code'            => $this->qr_code,
+				'add_num'            => $this->add_num,
+				'update_time'        => $this->update_time,
+				'create_time'        => $this->create_time,
+				'tag_ids'            => $this->tag_ids,
+				'user_key'           => $this->user_key,
+				'material_sync'      => $this->material_sync,
+				'sync_attachment_id' => $this->sync_attachment_id,
+				'attachment_id'      => $this->attachment_id,
+				'groupId'            => $this->groupId,
+				'status'             => $this->status,
+				'content'            => $this->content,
+				'open_date'          => $this->open_date,
+				'specialTime'        => $this->open_date,
+				'local_path'         => $this->local_path,
+				'verify_all_day'     => $this->verify_all_day,
+				'is_welcome_date'    => $this->is_welcome_date,
+				'is_welcome_week'    => $this->is_welcome_week,
+				'is_limit'           => $this->is_limit,
+				'package_del'        => $this->package_del,
+			];
+
+			/*if($result['status'] > 0 && isset($result['material_sync'])) {
+				//todo beenlee 雷达链接状态
+				if ($result['material_sync'] > 0) {
+					$radarInfo = RadarLink::findOne(['associat_type' => 0, 'associat_id' => $result['sync_attachment_id']]);
+				} else {
+					$radarInfo = RadarLink::findOne(['associat_type' => 1, 'associat_id' => $result['id'], 'associat_param' => NULL]);
+				}
+
+				if ($radarInfo) {
+					$result['radar_id']             = $radarInfo->id;
+					$result['radar_status']         = $radarInfo->status;
+					$result['dynamic_notification'] = $radarInfo->dynamic_notification;
+					$result['radar_tag_open']       = $radarInfo->radar_tag_open;
+					$result['radar_tag_ids']        = $radarInfo->tag_ids;
+					$result['radar_tag_ids_name']   = [];
+					if (!empty($radarInfo->tag_ids)) {
+						$tags = WorkTag::find()->select('id,tagname')->where(['in', 'id', explode(',', $radarInfo->tag_ids)])->andWhere(['is_del' => 0])->all();
+						if ($tags) {
+							$tags_name = array_values(ArrayHelper::map($tags, 'id', 'tagname'));
+						}
+					}
+					if (isset($tags_name) && !empty($tags_name)) {
+						$result['radar_tag_ids_name'] = $tags_name;
+					}
+				} else {
+					$result['radar_id']             = 0;
+					$result['radar_status']         = 0;
+					$result['dynamic_notification'] = 0;
+					$result['radar_tag_open']       = 0;
+					$result['radar_tag_ids']        = '';
+					$result['radar_tag_ids_name']   = [];
+				}
+			}*/
+
+			$sEmployee = [];
+			if (!empty($this->spare_employee)) {
+				$sEmployee = Json::decode($this->spare_employee, true);
+				if(!empty($sEmployee) && is_array($sEmployee)){
+					foreach ( $sEmployee as &$value){
+						if(!isset($value["title"])){
+							$value["title"]       = $value["name"];
+							$value["isLeaf"]      = true;
+						}
+						if (isset($val["user_key"])) {
+							$val["key"] = $val["user_key"];
+						}
+						$value["scopedSlots"] = ['title' => 'custom'];
+						if (strpos($value["id"], 'd') !== false) {
+							$value["scopedSlots"] = ["title" => "title"];
+						}
+					}
+				}
+			}
+			$result['spare_employee'] = $sEmployee; //备用员工
+
+			$limitInfo = [];
+			if ($this->is_limit == 2) {
+				//开启员工上限
+				$userLimit = WorkContactWayUserLimit::find()->where(['way_id' => $this->id])->all();
+				if (!empty($userLimit)) {
+					/** @var WorkContactWayUserLimit $limit */
+					foreach ($userLimit as $limit) {
+						array_push($limitInfo, $limit->dumpData());
+					}
+				}
+			}
+			$result['user_limit'] = $limitInfo;
+
+			$verifyDate = [];
+			if ($this->verify_all_day == 2) {
+				//开启了分时段验证
+				$date = WorkContactWayVerifyDate::find()->where(['way_id' => $this->id])->asArray()->all();
+				if (!empty($date)) {
+					foreach ($date as $key => $val) {
+						$verifyDate[$key]['start_time'] = $val['start_time'];
+						$verifyDate[$key]['end_time']   = $val['end_time'];
+					}
+				}
+			}
+			$result['verify_date'] = $verifyDate;
+
+			$welcomeDateList = [];
+			if ($this->is_welcome_date == 2) {
+				//开启了日期欢迎语
+				$dateData = WorkContactWayDateWelcome::find()->where(['way_id' => $this->id, 'type' => 2])->asArray()->all();
+				if (!empty($dateData)) {
+					foreach ($dateData as $key => $data) {
+						$dateCon[]                     = $data['start_date'];
+						$dateCon[]                     = $data['end_date'];
+						$welcomeDateList[$key]['date'] = $dateCon;
+						$timeDate                      = WorkContactWayDateWelcomeContent::getData($data['id'],$this->id);
+						$welcomeDateList[$key]['time'] = $timeDate;
+					}
+				}
+			}
+			$result['welcome_date_list'] = $welcomeDateList;
+
+			$welcomeWeekList = [];
+			if ($this->is_welcome_week == 2) {
+				//开启了周欢迎语
+				$dateData = WorkContactWayDateWelcome::find()->where(['way_id' => $this->id, 'type' => 1])->asArray()->all();
+				if (!empty($dateData)) {
+					foreach ($dateData as $key => $data) {
+						$weekCont                      = Json::decode($data['day'], true);
+						$welcomeWeekList[$key]['date'] = $weekCont;
+						$timeDate                      = WorkContactWayDateWelcomeContent::getData($data['id'],$this->id);
+						$welcomeWeekList[$key]['time'] = $timeDate;
+					}
+				}
+			}
+			$result['welcome_week_list'] = $welcomeWeekList;
+
+			$result['add_num'] = WorkExternalContactFollowUser::find()->where(['way_id' => $this->id, 'del_type' => [WorkExternalContactFollowUser::WORK_CON_EX, WorkExternalContactFollowUser::NO_ASSIGN]])->count();
+
+			if ($withUser) {
+				$result['user'] = [];
+				if (!empty($this->workContactWayUsers)) {
+					foreach ($this->workContactWayUsers as $wayUser) {
+						array_push($result['user'], $wayUser->user->dumpData());
+					}
+				}
+			}
+
+			if ($withParty) {
+				$result['department'] = [];
+				if (!empty($this->workContactWayDepartments)) {
+					foreach ($this->workContactWayDepartments as $wayDepartment) {
+						array_push($result['department'], $wayDepartment->department->dumpData());
+					}
+				}
+			}
+
+			if (!empty($this->workContactWayGroup)) {
+				$result['way_group_name'] = $this->workContactWayGroup->title;
+			}
+
+			return $result;
+		}
+
+		/**
+		 * @param $corpId
+		 * @param $contactWayInfo
+		 * @param $otherInfo
+		 *
+		 * @return int
+		 *
+		 * @throws InvalidDataException
+		 * @throws \ParameterError
+		 * @throws \QyApiError
+		 * @throws \yii\base\InvalidConfigException
+		 */
+		public static function addWay ($corpId, $contactWayInfo, $otherInfo)
+		{
+			$authCorp = WorkCorp::findOne($corpId);
+
+			if (empty($authCorp)) {
+				throw new InvalidDataException('参数不正确。');
+			}
+
+			$workApi = WorkUtils::getWorkApi($corpId, WorkUtils::EXTERNAL_API);
+			$wayId   = 0;
+			try {
+				if (!empty($workApi)) {
+					$sendData = ExternalContactWay::parseFromArray($contactWayInfo);
+					$way      = $workApi->ECAddContactWay($sendData);
+
+					$wayId = static::getWay($corpId, $way['config_id'], $otherInfo);
+				}
+			} catch (\Exception $e) {
+				$message = $e->getMessage();
+				if (strpos($message, '84074') !== false) {
+					$message = '没有外部联系人权限';
+				}
+				if (strpos($message, '41054') !== false) {
+					$message = '引流成员必须是已激活的成员（已登录过APP的才算作完全激活）';
+				}
+				if (strpos($message, '40096') !== false) {
+					$message = '不合法的外部联系人userid';
+				} elseif (strpos($message, '40098') !== false) {
+					$message = '接替成员尚未实名认证';
+				} elseif (strpos($message, '40100') !== false) {
+					$message = '用户的外部联系人已经在转移流程中';
+				} elseif (strpos($message, '40003') !== false) {
+					$message = '无效的UserID';
+				}
+				throw new InvalidDataException($message);
+			}
+
+			return $wayId;
+		}
+
+		/**
+		 * @param $corpId
+		 * @param $configId
+		 * @param $otherInfo
+		 *
+		 * @return int
+		 * @throws InvalidDataException
+		 * @throws \ParameterError
+		 * @throws \QyApiError
+		 * @throws \app\components\InvalidParameterException
+		 * @throws \yii\base\InvalidConfigException
+		 */
+		public static function getWay ($corpId, $configId, $otherInfo)
+		{
+			$authCorp = WorkCorp::findOne($corpId);
+
+			if (empty($authCorp)) {
+				throw new InvalidDataException('参数不正确。');
+			}
+
+			$workApi = WorkUtils::getWorkApi($corpId, WorkUtils::EXTERNAL_API);
+			$wayId   = 0;
+
+			if (!empty($workApi)) {
+				$wayInfo = $workApi->ECGetContactWay($configId);
+				$wayInfo = SUtils::Object2Array($wayInfo);
+
+				$wayId = static::setWay($corpId, $wayInfo['contact_way'], $otherInfo);
+			}
+
+			return $wayId;
+		}
+
+		/**
+		 * @param $corpId
+		 * @param $contactWayInfo
+		 * @param $otherInfo
+		 *
+		 * @return int
+		 *
+		 * @throws InvalidDataException
+		 * @throws \ParameterError
+		 * @throws \QyApiError
+		 * @throws \yii\base\InvalidConfigException
+		 */
+		public static function updateWay ($corpId, $contactWayInfo, $otherInfo)
+		{
+			$authCorp = WorkCorp::findOne($corpId);
+
+			if (empty($authCorp)) {
+				throw new InvalidDataException('参数不正确。');
+			}
+
+			$workApi = WorkUtils::getWorkApi($corpId, WorkUtils::EXTERNAL_API);
+			$wayId   = 0;
+			try {
+				if (!empty($workApi)) {
+					$sendData = ExternalContactWay::parseFromArray($contactWayInfo);
+					$workApi->ECUpdateContactWay($sendData);
+
+					$wayId = static::setWay($corpId, $contactWayInfo, $otherInfo);
+				}
+			} catch (\Exception $e) {
+				$message = $e->getMessage();
+				if (strpos($message, '84074') !== false) {
+					$message = '没有外部联系人权限';
+				}
+				if (strpos($message, '41054') !== false) {
+					$message = '引流成员必须是已激活的成员（已登录过APP的才算作完全激活）';
+				}
+				if (strpos($message, '40096') !== false) {
+					$message = '不合法的外部联系人userid';
+				} elseif (strpos($message, '40098') !== false) {
+					$message = '接替成员尚未实名认证';
+				} elseif (strpos($message, '40100') !== false) {
+					$message = '用户的外部联系人已经在转移流程中';
+				} elseif (strpos($message, '40003') !== false) {
+					$message = '无效的UserID';
+				}
+				throw new InvalidDataException($message);
+			}
+
+			return $wayId;
+		}
+
+		public static function delWay ($id)
+		{
+			$way = static::findOne($id);
+			try {
+				if (!empty($way)) {
+					$workApi = WorkUtils::getWorkApi($way->corp_id, WorkUtils::EXTERNAL_API);
+					if (!empty($workApi)) {
+						$workApi->ECDelContactWay($way->config_id);
+					}
+					$way->is_del = WorkContactWay::WAY_IS_DEL;
+					$way->save();
+					$attachment = Attachment::findOne(['channel_type' => 2, 'channel_id' => $id]);
+					if (!empty($attachment)) {
+						$attachment->status = 0;
+						$attachment->save();
+					}
+				}
+			} catch (\Exception $e) {
+				$message = $e->getMessage();
+				\Yii::error($message, 'deleteMessage');
+			}
+
+			return true;
+		}
+
+		/**
+		 * @param $corpId
+		 * @param $contactWayInfo
+		 * @param $otherInfo
+		 *
+		 * @return int
+		 *
+		 * @throws InvalidDataException
+		 * @throws \app\components\InvalidParameterException]
+		 */
+		public static function setWay ($corpId, $contactWayInfo, $otherInfo)
+		{
+			$transaction = \Yii::$app->db->beginTransaction();
+			try {
+				$way    = static::findOne(['corp_id' => $corpId, 'config_id' => $contactWayInfo['config_id']]);
+				$is_add = 0;
+				$uid    = !empty($otherInfo['uid']) ? $otherInfo['uid'] : 0;
+				if (empty($way)) {
+					$way                = new self();
+					$way->create_time   = DateUtil::getCurrentTime();
+					$sync_attachment_id = 0;
+					$is_add             = 1;
+				} else {
+					$sync_attachment_id = $way->sync_attachment_id;
+				}
+
+				if ($otherInfo['add_type'] == 2 && !empty($otherInfo['link_image'])) {
+					$link_image      = $otherInfo['link_image'];
+					$sub_id          = $otherInfo['sub_id'];
+					$isMasterAccount = $otherInfo['isMasterAccount'];
+					$group_id        = NULL;
+					unset($otherInfo['link_image']);
+					unset($otherInfo['sub_id']);
+					unset($otherInfo['isMasterAccount']);
+
+					if (empty($group_id)) {
+						$groupInfo = AttachmentGroup::findOne(['uid' => $otherInfo['uid'], 'is_not_group' => 1]);
+						if (empty($groupInfo)) {
+							$group               = new AttachmentGroup();
+							$group->uid          = $otherInfo['uid'];
+							$group->title        = '未分组';
+							$group->sort         = 1;
+							$group->is_not_group = 1;
+							$group->create_time  = DateUtil::getCurrentTime();
+							if (!$group->validate() || !$group->save()) {
+								throw new InvalidDataException(SUtils::modelError($group));
+							}
+							Attachment::updateAll(['group_id' => $group->id], ['uid' => $otherInfo['uid'], 'status' => 1, 'group_id' => NULL]);
+							$group_id = $group->id;
+						} else {
+							$group_id = $groupInfo->id;
+						}
+					}
+
+					//上传临时图片素材
+					$attachment                  = new Attachment();
+					$attachment->uid             = $otherInfo['uid'];
+					$attachment->sub_id          = $sub_id;
+					$attachment->isMasterAccount = $isMasterAccount;
+					$attachment->file_type       = 1;
+					$attachment->create_time     = DateUtil::getCurrentTime();
+					$attachment->group_id        = $group_id;
+					$attachment->is_temp         = 1;
+
+					//文件
+					$link_image_name = pathinfo($link_image,PATHINFO_FILENAME);
+					$length = mb_strlen($link_image_name, 'utf-8');
+					if ($length > 128) {
+						$attachment->file_name = mb_substr($link_image_name, 0, 128, 'utf-8');
+					} else {
+						$attachment->file_name = $link_image_name;
+					}
+
+					$img_data                      = getimagesize(\Yii::getAlias('@app').$link_image);
+					$attachment->local_path        = $link_image;
+					$attachment->file_length       = $img_data['bits'];
+					$attachment->file_content_type = $img_data['mime'];
+					$attachment->file_width        = $img_data[0];
+					$attachment->file_height       = $img_data[1];
+
+					if (!$attachment->validate() || !$attachment->save()) {
+						throw new InvalidDataException(SUtils::modelError($attachment));
+					}
+
+					$otherInfo['link_attachment_id'] = $attachment->id;
+				}
+
+				$way->corp_id   = $corpId;
+				$way->config_id = $contactWayInfo['config_id'];
+
+				if ($otherInfo['open_date']) {
+					$way->open_date = 1;
+				} else {
+					$way->open_date = 0;
+				}
+				$choose_date = $otherInfo['choose_date'];
+
+				if (!empty($contactWayInfo['type'])) {
+					$way->type = $contactWayInfo['type'];
+				}
+
+				if (!empty($contactWayInfo['scene'])) {
+					$way->scene = $contactWayInfo['scene'];
+				}
+
+				if (!empty($contactWayInfo['style'])) {
+					$way->style = $contactWayInfo['style'];
+				}
+
+				if (!empty($contactWayInfo['remark'])) {
+					$way->remark = $contactWayInfo['remark'];
+				}
+
+				$way->skip_verify = $otherInfo['skip_verify'];
+				$way->is_new      = 1;
+//				if (!empty($contactWayInfo['skip_verify'])) {
+//					$way->skip_verify = 0;
+//				} else {
+//					$way->skip_verify = 1;
+//				}
+
+				if (!empty($contactWayInfo['state'])) {
+					$stateData = explode("_", $contactWayInfo['state']);
+					if (count($stateData) > 1 && $stateData[0] == self::DEFAULT_WAY_PRE) {
+						$way->state = '';
+					} else {
+						$way->state = $contactWayInfo['state'];
+					}
+				}
+
+				if (!empty($contactWayInfo['qr_code'])) {
+					$way->qr_code = $contactWayInfo['qr_code'];
+					if (!empty($is_add)) {
+						$imageData = Material::getImage($contactWayInfo['qr_code'], 'qrcode/' . $uid . '/wxwork');
+						Yii::error($imageData, '$imageData');
+						if (!empty($imageData['local_path'])) {
+							$way->local_path = $imageData['local_path'];
+						}
+					}
+				}
+				$content      = WorkWelcome::getContent($otherInfo);
+				$way->content = json_encode($content);
+				$tagsIds      = isset($otherInfo['tag_ids']) ? trim($otherInfo['tag_ids'], ',') : '';
+				if (!empty($tagsIds)) {
+					$tagsIdData = explode(',', $tagsIds);
+					$tagsData   = WorkTag::find()
+						->where(['id' => $tagsIdData, 'is_del' => WorkTag::NORMAL_TAG])
+						->select('id')
+						->asArray()
+						->all();
+
+					if (!empty($tagsData)) {
+						$tagsIdData = array_column($tagsData, 'id');
+						$tagsIds    = implode(',', $tagsIdData);
+					} else {
+						$tagsIds = '';
+					}
+				}
+				$way->tag_ids  = $tagsIds;
+				$way->status   = isset($otherInfo['status']) ? $otherInfo['status'] : 0;
+				$way->title    = isset($otherInfo['title']) ? $otherInfo['title'] : '';
+				$groupId       = isset($otherInfo['group_id']) ? $otherInfo['group_id'] : 0;
+				$material_sync = isset($otherInfo['material_sync']) ? $otherInfo['material_sync'] : 0;
+				$attachment_id = isset($otherInfo['attachment_id']) ? $otherInfo['attachment_id'] : 0;
+				//$way->user_key      = isset($otherInfo['user_key']) ? json_encode($otherInfo['user_key']) : '';
+				$way->material_sync = $material_sync;
+				$way->attachment_id = $attachment_id;
+				$way->groupId       = $groupId;
+
+				//新加数据
+				$way->verify_all_day  = isset($otherInfo['verify_all_day']) ? $otherInfo['verify_all_day'] : 1;
+				$way->is_limit        = isset($otherInfo['is_limit']) ? $otherInfo['is_limit'] : 1;  //2开启员工上限
+				$userLimit            = isset($otherInfo['user_limit']) ? $otherInfo['user_limit'] : '';  //员工上限列表
+				$spareEmployee        = isset($otherInfo['spare_employee']) && !empty($otherInfo['spare_employee']) ? json_encode($otherInfo['spare_employee']) : '';   //备用员工
+				$verifyDate           = isset($otherInfo['verify_date']) && !empty($otherInfo['verify_date']) ? $otherInfo['verify_date'] : '';
+				$way->is_welcome_date = isset($otherInfo['is_welcome_date']) ? $otherInfo['is_welcome_date'] : 1;
+				$way->is_welcome_week = isset($otherInfo['is_welcome_week']) ? $otherInfo['is_welcome_week'] : 1;
+				$welcomeDateList      = isset($otherInfo['welcome_date_list']) ? $otherInfo['welcome_date_list'] : [];
+				$welcomeWeekList      = isset($otherInfo['welcome_week_list']) ? $otherInfo['welcome_week_list'] : [];
+				/**sym 刪除選擇部門但是查询需要回写*/
+				WorkDepartment::FormatData($choose_date,$otherInfo['week_user']);
+
+				if ($way->is_limit == 2) {
+					$way->spare_employee = $spareEmployee;
+				} else {
+					$way->spare_employee = '';
+				}
+				//分组
+				if (!empty($otherInfo['way_group_id'])) {
+					$way->way_group_id = $otherInfo['way_group_id'];
+				} else {
+					$wayGroup = WorkContactWayGroup::setNoGroup($uid, $corpId);
+					if (!empty($wayGroup)) {
+						$way->way_group_id = $wayGroup->id;
+					}
+				}
+
+				//欢迎语同步到内容库
+				$way_info = static::findOne(['corp_id' => $corpId, 'config_id' => $contactWayInfo['config_id']]);
+				if ($material_sync == 1 && empty($attachment_id)) {
+					$otherInfo['sync_attachment_id'] = $sync_attachment_id;
+					$sync_attachment_id              = WorkWelcome::syncData($otherInfo);
+				}
+				$way->sync_attachment_id = $sync_attachment_id;
+
+				if ($otherInfo['add_type'] == 3 && !empty($otherInfo['attachment_id'])) {
+					$otherInfo['corp_id'] = $corpId;
+					if (!empty($way_info)) {
+						$work_material_id = $way_info->work_material_id;
+						if (empty($work_material_id)) {
+							$way->work_material_id = WorkWelcome::getMaterialId($otherInfo);
+						}
+					} else {
+						$way->work_material_id = WorkWelcome::getMaterialId($otherInfo);
+					}
+				}
+				if ($way->dirtyAttributes) {
+					if (!$way->validate() || !$way->save()) {
+						throw new InvalidDataException(SUtils::modelError($way));
+					}
+
+					if (!($otherInfo['material_sync'] == 1 && empty($otherInfo['attachment_id']))) {
+						//beenlee 不同步 雷达规则跟随欢迎语
+						if (isset($otherInfo['dynamic_notification'])) {
+							$otherInfo['radar_dynamic_notification'] = $otherInfo['dynamic_notification'];
+						}
+						if (isset($otherInfo['radar_open'], $otherInfo['radar_dynamic_notification'], $otherInfo['radar_tag_open'], $otherInfo['radar_tag_ids']) && $otherInfo['radar_open'] >= 0) {
+							RadarLink::addRadarLink(1, $way->id, $otherInfo['radar_dynamic_notification'], $otherInfo['radar_tag_open'], $otherInfo['radar_tag_ids'], $otherInfo['radar_open'], '渠道活码欢迎语ID:' . $way->id, NULL, $content);
+						}
+					}
+				}
+				if (!empty($is_add)) {
+					//添加至内容引擎
+					$imageData['uid']       = !empty($uid) ? $uid : '';
+					$imageData['file_name'] = $way->title;
+					Attachment::addChannel($way->id, $imageData, Attachment::WORK_TYPE);
+				}
+				if (empty($contactWayInfo['state'])) {
+					/** @var Work $workApi */
+					try {
+						$workApi = WorkUtils::getWorkApi($corpId, WorkUtils::EXTERNAL_API);
+					} catch (\Exception $e) {
+						Yii::error($e->getMessage(), __CLASS__ . "-" . __FUNCTION__ . ":getWorkApi");
+						throw new InvalidDataException($e->getMessage());
+					}
+
+					try {
+						if (!empty($workApi)) {
+							$sendData = ExternalContactWay::parseFromArray(['config_id' => $way->config_id, 'state' => self::DEFAULT_WAY_PRE . "_" . $way->id]);
+							$workApi->ECUpdateContactWay($sendData);
+						}
+					} catch (\Exception $e) {
+						Yii::error($e->getMessage(), __CLASS__ . "-" . __FUNCTION__ . ":updateWay");
+						throw new InvalidDataException($e->getMessage());
+					}
+				}
+				if ($way->open_date == 1) {
+					//同步到渠道活码日期成员表
+					$res = WorkContactWayDate::setData($choose_date, $way->id);
+					Yii::error($res, '$res');
+				}
+				if (!empty($otherInfo['week_user'])) {
+					$weekUser = $otherInfo['week_user'];
+					WorkContactWayDate::setWeekData($weekUser, $way->id);
+				}
+				//分时段验证通过好友
+				if ($way->verify_all_day == 2) {
+					//开启分时段
+					$wayId = $way->id;
+					WorkContactWayVerifyDate::add($verifyDate, $wayId);
+				}
+				//添加员工上限
+				if ($way->is_limit == 2) {
+					$wayId = $way->id;
+					WorkContactWayUserLimit::add($userLimit, $wayId);
+				}
+				//设置分时段欢迎语
+				if ($way->is_welcome_date == 2) {
+					$wayId = $way->id;
+					WorkContactWayDateWelcome::add($welcomeDateList, $wayId, 2, $corpId, $uid);
+				}
+				//设置每周欢迎语
+				if ($way->is_welcome_week == 2) {
+					$wayId = $way->id;
+					WorkContactWayDateWelcome::add($welcomeWeekList, $wayId, 1, $corpId, $uid);
+				}
+
+				if (empty($is_add) && $way->is_limit == 2) {
+					//根据添加上限再次生成活码
+					static::getNewCode($way->id, $way->corp_id, $way->open_date, 1);
+				}
+
+				$transaction->commit();
+
+				return $way->id;
+
+			} catch (\Exception $e) {
+				$transaction->rollBack();
+				throw new InvalidDataException($e->getMessage());
+			}
+		}
+
+		/**
+		 * @param     $id
+		 * @param     $corpId
+		 * @param     $openDate
+		 * @param int $type
+		 *
+		 * @return bool
+		 *
+		 * @throws InvalidDataException
+		 */
+		public static function getNewCode ($id, $corpId, $openDate, $type = 0)
+		{
+			$week    = static::returnDay();
+			$date    = date('Y-m-d');
+			$newTime = time();
+			$h       = date('H');
+			if ($h == 23) {
+				$date = date("Y-m-d", strtotime("+1 day"));
+			}
+			$contactWay['id']        = $id;
+			$contactWay['corp_id']   = $corpId;
+			$contactWay['open_date'] = $openDate;
+			$contactData             = WorkContactWay::getDepartUser($contactWay, $week, $date, $newTime);
+			\Yii::error($contactData, '$contactData');
+			$contactUserId = $contactData['userId'];
+			$partyId       = $contactData['partyId'];
+			$contactWayNew = static::find()->where(['id' => $id])->asArray()->one();
+			$userId        = static::getUserId($contactUserId, $contactWayNew);
+			//判断是否开启了分时段自动通过
+			$verify = !(boolean) $contactWayNew['skip_verify'];
+			$verify = static::getVerify($contactWayNew, $verify, time());
+			if (!empty($userId) || !empty($partyId)) {
+				$contactWayInfo = [
+					'type'        => (int) $contactWayNew['type'],
+					'scene'       => (int) $contactWayNew['scene'],
+					'style'       => (int) $contactWayNew['style'],
+					'remark'      => $contactWayNew['remark'],
+					'skip_verify' => $verify,
+					'state'       => $contactWayNew['state'],
+					'user'        => $userId,
+					'party'       => $partyId,
+					'config_id'   => $contactWayNew['config_id'],
+				];
+				Yii::error($contactWayInfo, '$contactWayInfo');
+				try {
+					$result = static::editContact($contactWayNew['corp_id'], $contactWayInfo);
+					Yii::error($result, 'editContact-' . $contactWayNew['corp_id'] . '-' . $contactWayNew['id']);
+				} catch (\Exception $e) {
+					$message = $e->getMessage();
+					if ($type == 1) {
+						throw new InvalidDataException($message);
+					}
+					Yii::error($contactWayInfo, '$contactWayInfo');
+					Yii::error($message, '$message');
+				}
+
+			}
+
+			return true;
+		}
+
+		/**
+		 * @param $corp_id
+		 * @param $tag_id
+		 *
+		 * @return boolean
+		 *
+		 */
+		public static function deleteContactTag ($corp_id, $tag_id)
+		{
+			$workContact = WorkContactWay::find()->andWhere(['corp_id' => $corp_id])->andWhere(['<>', 'tag_ids', ''])->all();
+			if (!empty($workContact)) {
+				foreach ($workContact as $contact) {
+					$tag_ids = $contact->tag_ids;
+					$tag_ids = explode(',', $tag_ids);
+					foreach ($tag_ids as $key => $id) {
+						if ($id == $tag_id) {
+							unset($tag_ids[$key]);
+						}
+					}
+					$tag_new = '';
+					if (!empty($tag_ids)) {
+						$tag_new = implode(',', $tag_ids);
+					}
+					$contact->tag_ids = $tag_new;
+					$contact->save();
+				}
+			}
+
+			return true;
+		}
+
+		/**
+		 * @param $externalUserId
+		 * @param $follow_user_id
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getContactWay ($externalUserId, $follow_user_id)
+		{
+			$contact_way_id = '';
+			$chat_way_id    = '';
+			$award_id       = '';
+			$fission_id     = '';
+			$red_pack_id    = '';
+			$activity_id    = '';
+			$baidu_way_id   = '';
+			$way_redpack_id = '';
+			$state          = '';
+			$follow_user    = WorkExternalContactFollowUser::findOne(['external_userid' => $externalUserId, 'userid' => $follow_user_id]);
+			if (!empty($follow_user)) {
+				$contact_way_id = $follow_user->way_id;
+				$chat_way_id    = $follow_user->chat_way_id;
+				$award_id       = $follow_user->award_id;
+				$fission_id     = $follow_user->fission_id;
+				$red_pack_id    = $follow_user->red_pack_id;
+				$baidu_way_id   = $follow_user->baidu_way_id;
+				$way_redpack_id = $follow_user->way_redpack_id;
+				$activity_id    = $follow_user->activity_id;
+				$state          = $follow_user->state;
+			}
+
+			return ['activity_id' => $activity_id, 'contact_way_id' => $contact_way_id, 'chat_way_id' => $chat_way_id, 'fission_id' => $fission_id, 'award_id' => $award_id, 'red_pack_id' => $red_pack_id, 'baidu_way_id' => $baidu_way_id, 'way_redpack_id' => $way_redpack_id, 'user_id' => $follow_user->user_id, 'external_id' => $externalUserId, 'state' => $state];
+		}
+
+		/**
+		 * @param $corpId
+		 * @param $contactWayInfo
+		 *
+		 * @return array|null
+		 *
+		 * @throws InvalidDataException
+		 */
+		public static function editContact ($corpId, $contactWayInfo)
+		{
+			$result = [];
+			try {
+				$workApi = WorkUtils::getWorkApi($corpId, WorkUtils::EXTERNAL_API);
+
+				if (!empty($workApi)) {
+					$sendData = ExternalContactWay::parseFromArray($contactWayInfo);
+					$result   = $workApi->ECUpdateContactWay($sendData);
+				}
+			} catch (\Exception $e) {
+				$message = $e->getMessage();
+				if (strpos($message, '84074') !== false) {
+					$message = '没有外部联系人权限';
+				}
+				if (strpos($message, '41054') !== false) {
+					$message = '引流成员必须是已激活的成员（已登录过APP的才算作完全激活）';
+				}
+				if (strpos($message, '40096') !== false) {
+					$message = '不合法的外部联系人userid';
+				} elseif (strpos($message, '40098') !== false) {
+					$message = '接替成员尚未实名认证';
+				} elseif (strpos($message, '40100') !== false) {
+					$message = '用户的外部联系人已经在转移流程中';
+				}
+				throw new InvalidDataException($message);
+			}
+
+			return $result;
+		}
+
+		/**
+		 * 跑历史数据用
+		 *
+		 * @throws InvalidDataException
+		 */
+		public static function updateOldData ()
+		{
+			ini_set('memory_limit', '4096M');
+			set_time_limit(0);
+			$contactWay = WorkContactWay::find()->asArray()->all();
+			foreach ($contactWay as $way) {
+				$wayId    = $way['id'];
+				$user_key = $way['user_key'];
+				if (!empty($user_key)) {
+					$user = json_decode($user_key, true);
+					if (!empty($user)) {
+						if ($way['type'] == 1) {
+							$user_key = $user[0];
+						} else {
+							if (!empty($user)) {
+								foreach ($user as $key => $val) {
+									if (isset($val['id'])) {
+										$workUser = WorkUser::findOne($val['id']);
+										if (!empty($workUser)) {
+											$user[$key]['name'] = $workUser->name;
+										}
+									}
+								}
+								$user_key = json_encode($user);
+							}
+						}
+
+						$department = '';
+						$workDepart = WorkContactWayDepartment::find()->select('department_id')->andWhere(['config_id' => $wayId])->asArray()->all();
+						if (!empty($workDepart)) {
+							$department_id = array_column($workDepart, 'department_id');
+							$department    = json_encode($department_id);
+						}
+						static::wayDate($wayId, 'mon', $user_key, $department);
+						static::wayDate($wayId, 'tues', $user_key, $department);
+						static::wayDate($wayId, 'wednes', $user_key, $department);
+						static::wayDate($wayId, 'thurs', $user_key, $department);
+						static::wayDate($wayId, 'fri', $user_key, $department);
+						static::wayDate($wayId, 'satur', $user_key, $department);
+						static::wayDate($wayId, 'sun', $user_key, $department);
+					} else {
+						$department = '';
+						$workDepart = WorkContactWayDepartment::find()->select('department_id')->andWhere(['config_id' => $wayId])->asArray()->all();
+						if (!empty($workDepart)) {
+							$department_id = array_column($workDepart, 'department_id');
+							$department    = json_encode($department_id);
+							static::wayDate($wayId, 'mon', '[]', $department);
+							static::wayDate($wayId, 'tues', '[]', $department);
+							static::wayDate($wayId, 'wednes', '[]', $department);
+							static::wayDate($wayId, 'thurs', '[]', $department);
+							static::wayDate($wayId, 'fri', '[]', $department);
+							static::wayDate($wayId, 'satur', '[]', $department);
+							static::wayDate($wayId, 'sun', '[]', $department);
+						}
+					}
+				}
+			}
+		}
+
+		/**
+		 * 跑历史数据用
+		 *
+		 * @param $way_id
+		 * @param $day
+		 * @param $user_key
+		 * @param $department
+		 *
+		 * @throws InvalidDataException
+		 */
+		public static function wayDate ($way_id, $day, $user_key, $department)
+		{
+			$user = WorkContactWayDate::findOne(['type' => 0, 'way_id' => $way_id, 'day' => $day]);
+			if (empty($user)) {
+				$user              = new WorkContactWayDate();
+				$user->create_time = DateUtil::getCurrentTime();
+				$user->way_id      = $way_id;
+				$user->type        = 0;
+				$user->day         = $day;
+				if (!$user->validate() || !$user->save()) {
+					throw new InvalidDataException(SUtils::modelError($user));
+				}
+				static::dateUser($user->id, $user_key, $department);
+			}
+		}
+
+		/**
+		 * 跑历史数据用
+		 *
+		 * @param $dateId
+		 * @param $user_key
+		 * @param $department
+		 *
+		 */
+		public static function dateUser ($dateId, $user_key, $department)
+		{
+			$dateUser              = new WorkContactWayDateUser();
+			$dateUser->date_id     = $dateId;
+			$dateUser->time        = '00:00-00:00';
+			$dateUser->user_key    = $user_key;
+			$dateUser->department  = $department;
+			$dateUser->create_time = DateUtil::getCurrentTime();
+			$dateUser->save();
+		}
+
+		/**
+		 * @param $contactWay
+		 * @param $day
+		 * @param $date
+		 * @param $newTime
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getDepartUser ($contactWay, $day, $date, $newTime)
+		{
+			$userId  = [];
+			$partyId = [];
+			$wayDate = WorkContactWayDate::findOne(['way_id' => $contactWay['id'], 'type' => 0, 'day' => $day]);
+			if (!empty($wayDate)) {
+				$dateUser = WorkContactWayDateUser::find()->andWhere(['date_id' => $wayDate->id])->asArray()->all();
+				if (!empty($dateUser)) {
+					foreach ($dateUser as $user) {
+						if ($user['time'] == '00:00-00:00') {
+							$userDepart = static::getUserDepart($user['user_key'], $user['department'], $contactWay['corp_id']);
+							$userId     = $userDepart['userId'];
+							$partyId    = $userDepart['partyId'];
+						}
+						if ($user['time'] != '00:00-00:00') {
+							$time  = explode('-', $user['time']);
+							$date1 = $date . ' ' . $time[0] . ':00';
+							$date2 = $date . ' ' . $time[1] . ':00';
+							if ($time[1] == '00:00') {
+								$date2 = $date . ' ' . '23:59:59';
+							}
+							if ($newTime >= strtotime($date1) && $newTime <= strtotime($date2)) {
+								$userDepart = static::getUserDepart($user['user_key'], $user['department'], $contactWay['corp_id']);
+								$userId     = $userDepart['userId'];
+								$partyId    = $userDepart['partyId'];
+							}
+						}
+
+
+					}
+				}
+			}
+			if ($contactWay['open_date'] == 1) {
+				$workDateUser = WorkContactWayDate::find()->where(['type' => 1, 'way_id' => $contactWay['id']])->asArray()->all();
+				if (!empty($workDateUser)) {
+					foreach ($workDateUser as $user) {
+						$time1 = strtotime($user['start_date']);
+						$time2 = strtotime($user['end_date'] . ' 23:59:59');
+						if ($newTime >= $time1 && $newTime <= $time2) {
+							$dateUser = WorkContactWayDateUser::find()->andWhere(['date_id' => $user['id']])->asArray()->all();
+							foreach ($dateUser as $user) {
+								if ($user['time'] == '00:00-00:00') {
+									$userDepart = static::getUserDepart($user['user_key'], $user['department'], $contactWay['corp_id']);
+									$userId     = $userDepart['userId'];
+									$partyId    = $userDepart['partyId'];
+								}
+								if ($user['time'] != '00:00-00:00') {
+									$time  = explode('-', $user['time']);
+									$date1 = $date . ' ' . $time[0] . ':00';
+									$date2 = $date . ' ' . $time[1] . ':00';
+									if ($time[1] == '00:00') {
+										$date2 = $date . ' ' . '23:59:59';
+									}
+									if ($newTime >= strtotime($date1) && $newTime <= strtotime($date2)) {
+										$userDepart = static::getUserDepart($user['user_key'], $user['department'], $contactWay['corp_id']);
+										$userId     = $userDepart['userId'];
+										$partyId    = $userDepart['partyId'];
+									}
+								}
+
+							}
+
+						}
+
+					}
+				}
+
+			}
+
+			return [
+				'userId'  => $userId,
+				'partyId' => $partyId,
+			];
+		}
+
+		/**
+		 * @param $userId
+		 * @param $contactWay
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getUserId ($userId, $contactWay)
+		{
+			\Yii::error($userId, '$userId');
+			if ($contactWay['is_limit'] == 2) {
+				$nowUser       = [];
+				$workUserLimit = WorkContactWayUserLimit::find()->where(['way_id' => $contactWay['id']])->all();
+				if (!empty($workUserLimit)) {
+					/** @var WorkContactWayUserLimit $limit */
+					foreach ($workUserLimit as $limit) {
+						if ($limit->limit > 0) {
+							$todayTimeStart = strtotime(date('Y-m-d'));
+							//获取当前员工今日添加客户数
+							$hasCount = WorkExternalContactFollowUser::find()->where(['way_id' => $contactWay['id'], 'user_id' => $limit->user_id])->andFilterWhere(['between', 'createtime', $todayTimeStart, time()]);
+							\Yii::error($hasCount->createCommand()->getRawSql(), 'sql1111');
+							$hasCount = $hasCount->count();
+							if ($hasCount >= $limit->limit) {
+								array_push($nowUser, $limit->user_id);
+							}
+						}
+					}
+				}
+				\Yii::error($nowUser, '$nowUser');
+				if (!empty($userId) && !empty($nowUser)) {
+					$limitUser = WorkUser::find()->where(['id' => $nowUser])->all();
+					if (!empty($limitUser)) {
+						/** @var WorkUser $user */
+						foreach ($limitUser as $user) {
+							if (in_array($user->userid, $userId)) {
+								$numKey = array_search($user->userid, $userId);
+								unset($userId[$numKey]);
+							}
+						}
+					}
+					\Yii::error($userId, '$userId90909');
+					//当活码的员工为空时启用备用员工
+					if (empty($userId) && !empty($contactWay['spare_employee'])) {
+						$spEmployee = Json::decode($contactWay['spare_employee'], true);
+						if (is_array($spEmployee)) {
+							$Duserid = WorkDepartment::GiveUserIdsReturnDepartmentAndUserIds($spEmployee);
+							$spUser  = WorkUser::find()->where(["in", "id", $Duserid])->select("userid")->asArray()->all();
+							if(!empty($spUser)){
+								$userId  = array_merge($userId, ...array_column($spUser, "userid"));
+							}
+//							foreach ($spEmployee as $emp) {
+//								$spUser = WorkUser::findOne($emp['id']);
+//								if (!empty($spUser)) {
+//									array_push($userId, $spUser->userid);
+//								}
+//							}
+						} else {
+							$spUser = WorkUser::findOne($spEmployee);
+							if (!empty($spUser)) {
+								array_push($userId, $spUser->userid);
+							}
+						}
+
+					}
+				}
+
+			}
+
+			return $userId;
+		}
+
+		/**
+		 * @param $contactWay
+		 * @param $verify
+		 * @param $time
+		 *
+		 * @return bool
+		 *
+		 */
+		public static function getVerify ($contactWay, $verify, $time)
+		{
+			if ($contactWay['verify_all_day'] == 2) {
+				try {
+					$flag       = 0;
+					$verifyDate = WorkContactWayVerifyDate::find()->where(['way_id' => $contactWay['id']]);
+					$verifyDate = $verifyDate->asArray()->all();
+					if (!empty($verifyDate)) {
+						foreach ($verifyDate as $dateTime) {
+							$startTime = strtotime(date('Y-m-d') . ' ' . $dateTime['start_time']);
+							if ($dateTime['end_time'] == '00:00') {
+								$dateTime['end_time'] = '23:59:59';
+							}
+							$endTime = strtotime(date('Y-m-d') . ' ' . $dateTime['end_time']);
+							if ($startTime <= $time && $time <= $endTime) {
+								$flag = 1;//当前时间在分时段自动通过的范围内
+							}
+						}
+					}
+				} catch (\Exception $e) {
+					\Yii::error($e->getMessage(), 'message123');
+				}
+
+				if ($flag == 0) {
+					$verify = false; //需认证
+				}
+			}
+
+			return $verify;
+		}
+
+		/**
+		 * 每个整点执行的脚本
+		 *
+		 * @throws InvalidDataException
+		 * @throws \ParameterError
+		 * @throws \QyApiError
+		 * @throws \yii\base\InvalidConfigException
+		 */
+		public static function updateContactWay ()
+		{
+			ini_set('memory_limit', '4096M');
+			set_time_limit(0);
+			$workContactWay = WorkContactWay::find()->where(['is_del' => 0])->asArray()->all();
+			$week           = date('l');
+			$day            = '';
+			switch ($week) {
+				case 'Monday':
+					$day = WorkContactWayDate::MONDAY_DAY;
+					break;
+				case 'Tuesday':
+					$day = WorkContactWayDate::TUESDAY_DAY;
+					break;
+				case 'Wednesday':
+					$day = WorkContactWayDate::WEDNESDAY_DAY;
+					break;
+				case 'Thursday':
+					$day = WorkContactWayDate::THURSDAY_DAY;
+					break;
+				case 'Friday':
+					$day = WorkContactWayDate::FRIDAY_DAY;
+					break;
+				case 'Saturday':
+					$day = WorkContactWayDate::SATURDAY_DAY;
+					break;
+				case 'Sunday':
+					$day = WorkContactWayDate::SUNDAY_DAY;
+					break;
+			}
+			$date    = date('Y-m-d');
+			$newTime = time() + 300;
+			$h       = date('H');
+			if ($h == 23) {
+				$date = date("Y-m-d", strtotime("+1 day"));
+			}
+			foreach ($workContactWay as $contactWay) {
+				/** @var Queue $queue */
+				$queue = Yii::$app->pq;
+				$jobId = $queue->priority(1)->push(new WorkContactWayUpdateJob([
+					'contactWay' => $contactWay,
+					'day'        => $day,
+					'date'       => $date,
+					'newTime'    => $newTime,
+				]));
+
+				Yii::error($jobId, 'WorkContactWayUpdateJob:id');
+			}
+
+		}
+
+		/**
+		 * @param $userList
+		 * @param $departmentList
+		 * @param $corp_id
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getUserDepart ($userList, $departmentList, $corp_id)
+		{
+			$userId  = [];
+			$partyId = [];
+			if (!empty($userList)) {
+				$userList = json_decode($userList, true);
+				if (is_array($userList)) {
+					foreach ($userList as $val) {
+						$workUser = WorkUser::findOne($val['id']);
+						if (!empty($workUser) && $workUser->corp_id == $corp_id) {
+							array_push($userId, $workUser->userid);
+						}
+					}
+				} else {
+					$workUser = WorkUser::findOne($userList);
+					if (!empty($workUser) && $workUser->corp_id == $corp_id) {
+						array_push($userId, $workUser->userid);
+					}
+				}
+
+			}
+			if (!empty($departmentList)) {
+				$departments = json_decode($departmentList, true);
+				if (!empty($departments)) {
+					foreach ($departments as $depart) {
+						$department = WorkDepartment::findOne($depart);
+						if (!empty($department) && $department->corp_id == $corp_id) {
+							array_push($partyId, $department->department_id);
+						}
+					}
+				}
+			}
+
+			return [
+				'userId'  => $userId,
+				'partyId' => $partyId,
+			];
+
+		}
+
+		/**
+		 * @param $corpId
+		 * @param $configId
+		 *
+		 * @return array|mixed
+		 *
+		 * @throws InvalidDataException
+		 * @throws \ParameterError
+		 * @throws \QyApiError
+		 * @throws \yii\base\InvalidConfigException
+		 */
+		public static function returnContactInfo ($corpId, $configId)
+		{
+			$wayInfoNew = [];
+			try {
+				$workApi = WorkUtils::getWorkApi($corpId, WorkUtils::EXTERNAL_API);
+				if (!empty($workApi)) {
+					$wayInfo = $workApi->ECGetContactWay($configId);
+					$wayInfo = SUtils::Object2Array($wayInfo);
+
+					$wayInfoNew = $wayInfo['contact_way'];
+				}
+
+			} catch (\Exception $e) {
+
+			}
+
+			return $wayInfoNew;
+		}
+
+		/**
+		 * @param $data
+		 *
+		 * @return bool
+		 *
+		 * @throws InvalidDataException
+		 * @throws \app\components\InvalidParameterException
+		 */
+		public static function verify ($data)
+		{
+			$isLimit         = isset($data['is_limit']) ? $data['is_limit'] : 1;
+			$userLimit       = isset($data['user_limit']) ? $data['user_limit'] : [];
+			$verifyAllDay    = isset($data['verify_all_day']) ? $data['verify_all_day'] : 1;
+			$verifyDate      = isset($data['verify_date']) ? $data['verify_date'] : [];
+			$spareEmployee   = isset($data['spare_employee']) ? $data['spare_employee'] : [];
+			$welcomeDate     = isset($data['is_welcome_date']) ? $data['is_welcome_date'] : 1;
+			$welcomeWeek     = isset($data['is_welcome_week']) ? $data['is_welcome_week'] : 1;
+			$welcomeDateList = isset($data['welcome_date_list']) ? $data['welcome_date_list'] : [];
+			$welcomeWeekList = isset($data['welcome_week_list']) ? $data['welcome_week_list'] : [];
+			if ($isLimit == 2) {
+				if (empty($userLimit)) {
+					throw new InvalidDataException("请填写员工每日添加客户上限");
+				}
+				if (!is_array($userLimit)) {
+					throw new InvalidDataException("数据格式不对");
+				}
+				foreach ($userLimit as $limit) {
+					if ($limit['limit'] > 99999999) {
+						throw new InvalidDataException("员工添加上限不能超过99999999");
+					}
+				}
+				if (empty($spareEmployee)) {
+					throw new InvalidDataException("请选择备用员工");
+				}
+//				if (!is_array($spareEmployee)) {
+//					throw new InvalidDataException("数据格式不对");
+//				}
+			}
+			if ($verifyAllDay == 2) {
+				if (empty($verifyDate)) {
+					throw new InvalidDataException("自动通过好友时间段不能为空");
+				}
+				if (!is_array($verifyDate)) {
+					throw new InvalidDataException("数据格式不对");
+				}
+			}
+			if ($welcomeDate == 2) {
+				//验证日期欢迎语
+				if (empty($welcomeDateList)) {
+					throw new InvalidDataException("日期欢迎语不能为空");
+				}
+				if (!is_array($welcomeDateList)) {
+					throw new InvalidDataException("数据格式不对");
+				}
+				foreach ($welcomeDateList as $list) {
+					if (empty($list['date'])) {
+						throw new InvalidDataException("请选择时期");
+					}
+					foreach ($list['time'] as $val) {
+						if ($val['start_time'] == 'Invalid date' || $val['end_time'] == 'Invalid date') {
+							throw new InvalidDataException("请填写时间段");
+						}
+						if (!empty($val['content'])) {
+							$con                           = $val['content'];
+							$welcome                       = [];
+							$welcome['text_content']       = $con['text_content'];
+							$welcome['add_type']           = $con['add_type'];
+							$welcome['media_id']           = $con['media_id'];
+							$welcome['link_title']         = $con['link_title'];
+							$welcome['link_attachment_id'] = $con['link_attachment_id'];
+							$welcome['link_desc']          = $con['link_desc'];
+							$welcome['link_url']           = $con['link_url'];
+							$welcome['mini_title']         = $con['mini_title'];
+							$welcome['mini_pic_media_id']  = $con['mini_pic_media_id'];
+							$welcome['mini_appid']         = $con['mini_appid'];
+							$welcome['mini_page']          = $con['mini_page'];
+							$welcome['attachment_id']      = $con['attachment_id'];
+							//$welcome['status']             = $con['status'];
+							WorkWelcome::verify($welcome, 0);
+						}
+					}
+				}
+			}
+			if ($welcomeWeek == 2) {
+				//验证周欢迎语
+				if (empty($welcomeWeekList)) {
+					throw new InvalidDataException("周欢迎语不能为空");
+				}
+				if (!is_array($welcomeWeekList)) {
+					throw new InvalidDataException("数据格式不对");
+				}
+				foreach ($welcomeWeekList as $list) {
+					if (empty($list['date'])) {
+						throw new InvalidDataException("请选择周期");
+					}
+					foreach ($list['time'] as $val) {
+						if ($val['start_time'] == 'Invalid date' || $val['end_time'] == 'Invalid date') {
+							throw new InvalidDataException("请填写时间段");
+						}
+						if (!empty($val['content'])) {
+							$con                           = $val['content'];
+							$welcome                       = [];
+							$welcome['text_content']       = $con['text_content'];
+							$welcome['add_type']           = $con['add_type'];
+							$welcome['media_id']           = $con['media_id'];
+							$welcome['link_title']         = $con['link_title'];
+							$welcome['link_attachment_id'] = $con['link_attachment_id'];
+							$welcome['link_desc']          = $con['link_desc'];
+							$welcome['link_url']           = $con['link_url'];
+							$welcome['mini_title']         = $con['mini_title'];
+							$welcome['mini_pic_media_id']  = $con['mini_pic_media_id'];
+							$welcome['mini_appid']         = $con['mini_appid'];
+							$welcome['mini_page']          = $con['mini_page'];
+							$welcome['attachment_id']      = $con['attachment_id'];
+							//$welcome['status']             = $con['status'];
+							WorkWelcome::verify($welcome, 0);
+						}
+					}
+				}
+			}
+
+			return true;
+
+		}
+
+		/**
+		 * 获取部门成员
+		 *
+		 * @param $departId
+		 * @param $corpId
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getSubUser ($departId, $corpId)
+		{
+			$userId = [];
+			if (!empty($departId)) {
+				$department = WorkDepartment::find()->where(['id' => $departId])->select('department_id')->all();
+				if (!empty($department)) {
+					/** @var WorkDepartment $depart */
+					foreach ($department as $depart) {
+						$workDepart = WorkDepartment::getSubDepart($depart->department_id, $corpId, []);
+						array_push($workDepart, $depart->department_id);
+						$data = array_unique($workDepart);
+						unset($workDepart);
+						if (!empty($data)) {
+							foreach ($data as $v) {
+								$user = WorkUser::find()->where("find_in_set ('" . $v . "',department)")->andWhere(['corp_id' => $corpId, 'is_del' => 0])->select('id,name')->asArray()->all();
+								if (!empty($user)) {
+									foreach ($user as $key => $val) {
+										$userIds['user_id'] = $val['id'];
+										$userIds['name']    = $val['name'];
+										$userIds['limit']   = 100;
+										array_push($userId, $userIds);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return $userId;
+		}
+
+		/**
+		 * @param $id
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getUsers ($id)
+		{
+			$userId = [];
+			$user   = WorkUser::find()->where(['id' => $id, 'is_del' => 0])->select('id,name')->asArray()->all();
+			if (!empty($user)) {
+				foreach ($user as $key => $val) {
+					$userIds['user_id'] = $val['id'];
+					$userIds['name']    = $val['name'];
+					$userIds['limit']   = 100;
+					array_push($userId, $userIds);
+				}
+			}
+
+			return $userId;
+		}
+
+		/**
+		 *
+		 * @return string
+		 *
+		 */
+		public static function returnDay ()
+		{
+			$weekNow = date('l');
+			$day     = '';
+			switch ($weekNow) {
+				case 'Monday':
+					$day = WorkContactWayDate::MONDAY_DAY;
+					break;
+				case 'Tuesday':
+					$day = WorkContactWayDate::TUESDAY_DAY;
+					break;
+				case 'Wednesday':
+					$day = WorkContactWayDate::WEDNESDAY_DAY;
+					break;
+				case 'Thursday':
+					$day = WorkContactWayDate::THURSDAY_DAY;
+					break;
+				case 'Friday':
+					$day = WorkContactWayDate::FRIDAY_DAY;
+					break;
+				case 'Saturday':
+					$day = WorkContactWayDate::SATURDAY_DAY;
+					break;
+				case 'Sunday':
+					$day = WorkContactWayDate::SUNDAY_DAY;
+					break;
+			}
+
+			return $day;
+		}
+
+		/**
+		 * @param $id
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getDateWeekWelcome ($id)
+		{
+			$content    = [];
+			$contactWay = WorkContactWay::findOne($id);
+			if (!empty($contactWay)) {
+				if ($contactWay->status == 1) {
+					//开启了日期欢迎语
+					if ($contactWay->is_welcome_date == 2) {
+						$dateWelcome = WorkContactWayDateWelcome::find()->where(['way_id' => $id, 'type' => 2])->asArray()->all();
+						if (!empty($dateWelcome)) {
+							$dateNow = date('Y-m-d');
+							foreach ($dateWelcome as $wel) {
+								if (strtotime($dateNow) >= strtotime($wel['start_date']) && strtotime($dateNow) <= strtotime($wel['end_date'])) {
+									$content = WorkContactWayDateWelcomeContent::getContent($dateNow, $wel['id']);
+								}
+							}
+						}
+					}
+					//开启了周欢迎语
+					if ($contactWay->is_welcome_week == 2 && empty($content)) {
+						$day         = static::returnDay();
+						$weekWelcome = WorkContactWayDateWelcome::find()->where(['way_id' => $id, 'type' => 1])->asArray()->all();
+						if (!empty($weekWelcome)) {
+							foreach ($weekWelcome as $wel) {
+								$week = Json::decode($wel['day'], true);
+								$flag = 0;
+								foreach ($week as $we) {
+									if ($day == $we) {
+										$flag = 1;
+									}
+								}
+								if ($flag == 1) {
+									$dateNow = date('Y-m-d');
+									$content = WorkContactWayDateWelcomeContent::getContent($dateNow, $wel['id']);
+								}
+							}
+						}
+					}
+
+				}
+			}
+
+			return $content;
+
+		}
+
+		/**
+		 * @param $userId
+		 * @param $user
+		 *
+		 * @return array
+		 *
+		 */
+		public static function getWeekDateUserId ($userId, &$user)
+		{
+			if (!empty($userId)) {
+				foreach ($userId as $userData) {
+					if (is_numeric($userData['userList'])) {
+						array_push($user, $userData['userList']);
+					} else {
+						if (is_array($userData['userList'])) {
+							foreach ($userData['userList'] as $val) {
+								if (strpos($val['id'], 'd') === false) {
+									array_push($user, $val['id']);
+								}
+							}
+						}
+					}
+				}
+				array_unique($user);
+			}
+
+			return $user;
+		}
+
+	}

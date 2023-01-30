@@ -1,0 +1,17 @@
+须知：
+1、先将pig_custom_field、pig_custom_field_option、pig_menu、pig_system_authority表中的数据清空
+2、按照顺序依次执行sql文件
+
+==扩展部署文档：===
+一、清空表SQL
+SET FOREIGN_KEY_CHECKS=0;
+truncate table pig_custom_field;
+truncate table pig_custom_field_option;
+truncate table pig_menu;
+truncate table pig_system_authority;
+SET FOREIGN_KEY_CHECKS=1; 
+
+
+//解决带外键清空和删除
+SET FOREIGN_KEY_CHECKS=0;  //清空前
+SET FOREIGN_KEY_CHECKS=1; //清空后

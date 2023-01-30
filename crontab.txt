@@ -1,0 +1,51 @@
+*/1 * * * *	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 5 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 10 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 15 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 20 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 25 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 30 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 35 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 40 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 45 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 50 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+*/1 * * * *	sleep 55 &&	/data/web/kj-scrm/sh/watchPQ.sh > /dev/null 2>&1
+0 4 * * *       /data/web/kj-scrm/sh/queueScrmYii.sh
+0 0 * * *       /data/web/kj-scrm/sh/crmTagFans.sh
+10 0 * * *      /data/web/kj-scrm/sh/tagSceneCount.sh
+15 0 1 * *      /data/web/kj-scrm/sh/sceneMonthCount.sh
+0 0 * * *       /data/web/kj-scrm/sh/tagGetFansDay.sh
+0 0 * * 1       /data/web/kj-scrm/sh/tagGetFansWeek.sh
+0 0 1 * *       /data/web/kj-scrm/sh/tagGetFansMonth.sh
+0 5 * * *       /data/web/kj-scrm/sh/tagsGetUserDay.sh
+0 */1 * * *     /data/web/kj-scrm/sh/tagsUpdateContactWay.sh
+0 0 * * *       /data/web/kj-scrm/sh/tagsWorkContactWayDay.sh
+0 0 * * 1       /data/web/kj-scrm/sh/tagsWorkContactWayWeek.sh
+0 0 1 * *       /data/web/kj-scrm/sh/tagsWorkContactWayMonth.sh
+0 5 * * *       /data/web/kj-scrm/sh/tagRedPacket.sh > /dev/null 2>&1
+0 4 * * *       /data/web/kj-scrm/sh/tagChatDay.sh > /dev/null 2>&1
+0 0 * * *       /data/web/kj-scrm/sh/tagsGetFollowUser.sh > /dev/null 2>&1
+1 0 * * *       /data/web/kj-scrm/sh/tagsFollowStatisticDay.sh > /dev/null 2>&1
+1 0 * * 1       /data/web/kj-scrm/sh/tagsFollowStatisticWeek.sh > /dev/null 2>&1
+1 0 1 * *       /data/web/kj-scrm/sh/tagsFollowStatisticMonth.sh > /dev/null 2>&1
+1 0 * * *       /data/web/kj-scrm/sh/tagsSubScopeStatisticDay.sh > /dev/null 2>&1
+1 0 * * 1       /data/web/kj-scrm/sh/tagsSubScopeStatisticWeek.sh > /dev/null 2>&1
+1 0 1 * *       /data/web/kj-scrm/sh/tagsSubScopeStatisticMonth.sh > /dev/null 2>&1
+10 0 * * *      /data/web/kj-scrm/sh/tagsReclaimCustomer.sh > /dev/null 2>&1
+1 0 * * *       /data/web/kj-scrm/sh/tagsWorkActivityStatisticDay.sh > /dev/null 2>&1
+1 0 * * 1       /data/web/kj-scrm/sh/tagsWorkActivityStatisticWeek.sh > /dev/null 2>&1
+1 0 1 * *       /data/web/kj-scrm/sh/tagsWorkActivityStatisticMonth.sh > /dev/null 2>&1
+0 */1 * * *     /data/web/kj-scrm/sh/tagsUpdateContactWayRedpacket.sh > /dev/null 2>&1
+0 0 * * *       /data/web/kj-scrm/sh/tagsUpdateContactWayRedpacketStatus.sh > /dev/null 2>&1
+0 0 * * *       /data/web/kj-scrm/sh/tagsUserRemindMessageZero.sh > /dev/null 2>&1
+0 9 * * *       /data/web/kj-scrm/sh/tagsUserRemindMessageDay.sh > /dev/null 2>&1
+0 9 1 * *       /data/web/kj-scrm/sh/tagsUserRemindMessageMonth.sh > /dev/null 2>&1
+0 9 * * *       /data/web/kj-scrm/sh/tagsWaitUserRemind.sh > /dev/null 2>&1
+0 9 * * *       /data/web/kj-scrm/sh/tagsUserDelFollowNine.sh > /dev/null 2>&1
+0 */1 * * *     /data/web/kj-scrm/sh/changeOwner.sh > /dev/null 2>&1
+0 0,12 * * *    /data/web/kj-scrm/sh/tagsUpdateMoments.sh > /dev/null 2>&1
+0 1 * * *       /data/web/kj-scrm/sh/tagsUpdateMomentsAll.sh > /dev/null 2>&1
+0 0 * * *       /data/web/kj-scrm/sh/tagsSopMsgSending.sh > /dev/null 2>&1
+0 1 * * *       /data/web/kj-scrm/sh/shop.sh > /dev/null 2>&1
+
+

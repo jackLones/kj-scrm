@@ -1,0 +1,364 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" id="viewMeta" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0"><title>日思夜想智能营销系统</title><script>document.addEventListener('DOMContentLoaded', function () {
+			document.documentElement.style.fontSize = document.documentElement.clientWidth / 20 + 'px'
+		})</script><script src="/h5/static/h5/js/jq/jquery.js"></script><script src="/h5/static/h5/moor/moor.js" djconfig="isDebug:false, parseOnLoad:false"></script><script src="/h5/static/h5/js/m7Util.js"></script><script src="/h5/static/h5/js/moortools.js"></script><script src="/h5/static/h5/js/m7PhoneBar.js"></script><script src="/h5/static/h5/js/objectDeclare.js"></script><script src="/h5/static/h5/js/webPhoneSdk/webrtcVendor.js"></script><script src="/h5/static/h5/js/webPhoneSdk/webPhoneSdk.js"></script><script src="/h5/static/h5/js/recordError.js"></script><script src="/h5/static/h5/js/crypto/md5.min.js"></script><script src="/h5/static/h5/js/crypto/base64.min.js"></script><script>var m7$ = $.noConflict()
+		var moorCall = window.moorCall || {}
+		moorCall.config = {}</script><link rel="stylesheet" href="/h5/static/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vant@2.12/lib/index.css"><style>body{
+            margin: auto !important;
+        }
+		::-webkit-scrollbar {
+			display: none;
+		}
+
+		iframe {
+			background-image: url("/h5/static/assets/forbidden-iframe-url.png");
+			background-color: white;
+			background-position: center;
+			background-repeat: no-repeat;
+			background-size: 50% auto;
+			-moz-background-size: 50% auto;
+			-webkit-background-size: 50% auto;
+			-o-background-size: 50% auto;
+
+			z-index: 1001;
+			animation: breath 3s ease-in;
+			-moz-animation: breath 3s ease-in; /* Firefox */
+			-webkit-animation: breath 3s ease-in; /* Safari and Chrome */
+			-o-animation: breath 3s ease-in; /* Opera */
+		}
+
+		@keyframes breath {
+			0% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				background-size: 50% auto;
+			}
+			99% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				background-size: 50% auto;
+			}
+			100% {
+				background-image: url("/h5/static/assets/forbidden-iframe-url.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				background-size: 50% auto;
+			}
+		}
+
+		@-moz-keyframes breath {
+			0% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-moz-background-size: 50% auto;
+			}
+			99% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-moz-background-size: 50% auto;
+			}
+			100% {
+				background-image: url("/h5/static/assets/forbidden-iframe-url.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-moz-background-size: 50% auto;
+			}
+		}
+
+		@-webkit-keyframes breath {
+			0% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-webkit-background-size: 50% auto;
+			}
+			99% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-webkit-background-size: 50% auto;
+			}
+			100% {
+				background-image: url("/h5/static/assets/forbidden-iframe-url.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-webkit-background-size: 50% auto;
+			}
+		}
+
+		@-o-keyframes breath {
+			0% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-o-background-size: 50% auto;
+			}
+			99% {
+				background-image: url("/h5/static/assets/iframe-loading.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-o-background-size: 50% auto;
+			}
+			100% {
+				background-image: url("/h5/static/assets/forbidden-iframe-url.png");
+				background-color: white;
+				background-position: center;
+				background-repeat: no-repeat;
+				-o-background-size: 50% auto;
+			}
+		}
+
+		@keyframes voiceRun1 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: transparent;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@keyframes voiceRun2 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: #2390FF;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@keyframes voiceRun3 {
+			0% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			25% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			50% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			75% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			100% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+		}
+
+		@-moz-keyframes voiceRun1 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: transparent;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@-moz-keyframes voiceRun2 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: #2390FF;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@-moz-keyframes voiceRun3 {
+			0% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			25% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			50% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			75% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			100% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+		}
+
+		@-webkit-keyframes voiceRun1 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: transparent;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@-webkit-keyframes voiceRun2 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: #2390FF;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@-webkit-keyframes voiceRun3 {
+			0% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			25% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			50% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			75% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			100% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+		}
+
+		@-o-keyframes voiceRun1 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: transparent;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@-o-keyframes voiceRun2 {
+			0% {
+				border-color: transparent;
+			}
+			25% {
+				border-color: transparent;
+			}
+			50% {
+				border-color: #2390FF;
+			}
+			75% {
+				border-color: #2390FF;
+			}
+			100% {
+				border-color: transparent;
+			}
+		}
+
+		@-o-keyframes voiceRun3 {
+			0% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			25% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			50% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			75% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+			100% {
+				background: #2390FF;
+				border-color: #2390FF;
+			}
+		}
+
+		img {
+			vertical-align: top;
+			border: none
+		}</style></head><body><noscript><strong>Please enable JavaScript to continue.</strong></noscript><div id="app"></div><script>/*BAIDU_STAT*/</script><script src="https://res.wx.qq.com/open/js/jweixin-1.2.0.js"></script><script src="/h5/static/js/chunk-vendors.273179ed.js"></script><script src="/h5/static/js/index.87f00da1.js"></script></body></html>

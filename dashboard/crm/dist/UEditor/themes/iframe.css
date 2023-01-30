@@ -1,0 +1,12 @@
+/*可以在这里添加你自己的css*/
+section.custom_select_card_wrp {
+	/*width: 90%;*/
+	height: 90px;
+	background: url("../lang/zh-cn/images/music.png") no-repeat;
+	/*margin: 0 auto;*/
+}
+blockquote {
+	margin: 0;
+	padding-left: 10px;
+	border-left: 3px solid #dbdbdb;
+}

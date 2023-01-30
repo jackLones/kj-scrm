@@ -1,0 +1,31 @@
+{
+    "name": "youzanyun/open-sdk",
+    "description": "有赞云服务端SDK",
+    "type": "library",
+    "keywords": [
+        "youzan",
+        "youzanyun",
+        "open-sdk"
+    ],
+    "homepage": "https://github.com/youzan/open-sdk-php",
+    "authors": [
+        {
+            "name": "youzan",
+            "role": "Developer",
+            "homepage": "https://github.com/youzan"
+        }
+    ],
+    "require": {
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "guzzlehttp/guzzle": "^6.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Youzan\\Open\\": "src/Open"
+        }
+    },
+    "minimum-stability": "stable",
+    "license": "MIT"
+}
